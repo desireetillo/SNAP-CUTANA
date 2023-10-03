@@ -17,6 +17,3 @@ done
 
 swarm count_barcodes.sw
 
-#cd $wd
-
-#python Scripts/make_config.py --prefix TEST --template Templates/template_CutAndRunConfig.json --meta pairs.tab  --exp_type CutAndRun
