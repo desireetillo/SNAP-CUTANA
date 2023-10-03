@@ -1,0 +1,130 @@
+---
+title: "SNAP-CUTANA Barcode Analysis"
+author: "Des"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    code_folding: hide
+    toc_float: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+## import libraries and data
+
+```{r imports}
+library(dplyr)
+library(readr)
+library(ggplot2)
+
+data_file<-'SNAP_CUTANA.barcode_counts.csv'
+data<-read_csv(data_file)
+#colnames(data)<-gsub("_S.+", "" , 
+colnames(data)<-gsub("BH.._", "",colnames(data))
+rownames(data)<-data$modification
+target<-'H3K9me3'
+
+readstats<-read_tsv('SNAP_CUTANA_0623.QCTable.txt')
+rownames(readstats)<-readstats$Sample
+
+```
+
+## spike-in bandwidth
+
+Examine the % total barcode reads or spike-in bandwidth for each reaction. The spike- ins should comprise \~1% of unique sequencing reads for reliable analysis of antibody specificity. However, the range may be higher or lower depending on target abundance and antibody performance. For example:
+
+-   For H3K4me3 (low abundance target in cells), panel barcode reads are typically 1-10% of total sequencing reads.
+
+-   For H3K27me3 (high abundance target in cells), panel barcode reads are typically 0.1- 1% of total sequencing reads.
+
+-   For IgG negative control antibody (no target present in sample), panel barcode reads are typically 10-20% of total sequencing reads.
+
+-   Outside of this range, consider adjusting the spike-in dilution. The main goal is that thousands of sequencing reads are aligned to the spike-ins for adequate sampling of the panel and reliable use in antibody specificity assessment and data normalization.
+
+```{r spikeinbandwidth}
+
+cc<-100*colSums(data[,2:ncol(data)]) / readstats$mm10_Reads...6
+cc<-as.matrix(cc)
+colnames(cc)<-'prct_barcodes'
+DT::datatable(cc, 
+              options = list(
+                dom = 't',
+                pageLength=nrow(cc)
+              )) %>%
+   DT::formatRound(columns=1)
+```
+
+## Examine spike in data
+
+Use Output Table to assess antibody binding specificity starting with control reactions. Some guidance on using the controls:
+
+-   EpiCypher IgG control antibody (epicypher.com/13-0042) should not display specific enrichment for any SNAP-CUTANA Spike-in (all boxes orange).
+
+-   K-MetStatPanel:EpiCypher H3K4me3 control antibody(epicypher.com/13-0041)or H3K27me3 antibody (epicypher.com/13-0055) should display strong enrichment for its target (blue), with less than 20% cross-reactivity to off-target PTMs in the panel (orange). Typically our positive control antibodies show less than 10% cross-reactivity.
+
+Confirmation of these controls is considered a general readout of work flow success: cells were prepared properly and bound to ConA beads, the enzyme behaved as expected, library prep and sequencing proceeded normally, etc.
+
+Once these controls have been confirmed, proceed to analysis of other reactions. Each antibody should display 100% binding to target (blue), and less than 20% binding to off-target PTMs (appears orange).
+
+***An antibody with less than 20% binding to all off-target PTMs specific is suitable for downstream data analysis.***
+
+```{r plots, fig.height=8, fig.width=10}
+
+suppressMessages(library(ComplexHeatmap))
+suppressMessages(library(circlize))
+
+ctrl_inds<-which(grepl("IgG", colnames(data)))
+ip_inds<-which(grepl(target, colnames((data))))
+target_inds<-which(grepl(target,data$modification))
+
+norm_igg<-100*(data[,ctrl_inds]/colSums(data[,ctrl_inds]))
+rownames(norm_igg)<-data$modification
+norm_ip<-data.frame(100*mapply('/',data[,ip_inds],data[target_inds,ip_inds]))
+rownames(norm_ip)<-data$modification
+
+mycols<-colorRamp2(c(0,30,105),c("#FFC000","#7BA2DB","#6391D5"))
+mydata<-cbind(norm_igg,norm_ip)
+
+# reorder 
+mods<-c('Unmodified','H3K4me1','H3K4me2','H3K4me3','H3K9me1','H3K9me2','H3K9me3','H3K27me1','H3K27me2','H3K27me3','H3K36me1','H3K36me2','H3K36me3','H4K20me1','H4K20me2','H4K20me3')
+
+mydata<-mydata[mods,]
+mydata_mat<-t(as.matrix(mydata))
+
+Heatmap(mydata_mat,
+        name='% on target',
+        cluster_rows=F,
+        cluster_columns=F,
+        rect_gp = gpar(col = "white", lwd = 1),
+        col=mycols,
+        row_names_side = 'left',
+        cell_fun = function(j, i, x, y, width, height, fill) {
+          grid.text(sprintf("%.1f", mydata_mat[i, j]), x, y, gp = gpar(fontsize = 10))
+          }
+        )
+```
+
+Cross reactivity of H3K4me3 and H3K9me3
+
+## Compute scaling factors
+
+For spike-in normalization, a scale factor was calculated for each sample by dividing the percent of total reads aligned to the ref genome by the percent of total reads aligned to the spike-in barcodes (Scale Factor = % mapped Reads / % Spike-in Reads) and applying this factor to adjust the total sequencing reads of each respective sample.
+
+```{r scalingfactors}
+prct_mouse_reads<-100* (readstats$mm10_Reads...6 / (readstats$NReadsTrim*2))
+prct_spikein_reads<-100000*colSums(data[,2:ncol(data)]) / (readstats$NReadsTrim * 2)
+
+scale_factor<-as.matrix(prct_mouse_reads/prct_spikein_reads)
+colnames(scale_factor)<-'scale factor'
+DT::datatable(scale_factor, 
+              options = list(
+                dom = 't',
+                pageLength=nrow(cc)
+              )) %>%
+   DT::formatRound(columns=1)
+```
