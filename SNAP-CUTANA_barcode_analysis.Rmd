@@ -17,6 +17,10 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 ## import libraries and data
 
+This Rmd outlines the analysis of barcodes from the [SNAP-CUTANA KMetStat panel]( https://www.epicypher.com/products/nucleosomes/snap-cutana-k-metstat-panel)
+
+
+
 ```{r imports}
 library(dplyr)
 library(readr)
@@ -109,22 +113,41 @@ Heatmap(mydata_mat,
         )
 ```
 
-Cross reactivity of H3K4me3 and H3K9me3
+Cross reactivity of H3K9me3 with H3K4me3, H3K27me3, and H4K20me3.
+
+Some issues with IgG samples as well (some blue areas in heat map, particularly for WT samples).  
 
 ## Compute scaling factors
 
-For spike-in normalization, a scale factor was calculated for each sample by dividing the percent of total reads aligned to the ref genome by the percent of total reads aligned to the spike-in barcodes (Scale Factor = % mapped Reads / % Spike-in Reads) and applying this factor to adjust the total sequencing reads of each respective sample.
+For spike-in normalization, a scale factor was calculated for each sample by dividing the percent of total reads aligned to the ref genome by the percent of total reads aligned to the spike-in barcodes (Scale Factor = % mapped Reads / % Spike-in Reads) and applying this factor to adjust the total sequencing reads of each respective sample. 
+
+Not sure why this is the recommended scaling formula, other spike in procedures only use the spike-in counts to normalize (why rescale spike in?).  the nf-core wf uses scale_factor = 10^4/ # spike-in reads (This is scale.factor2)
 
 ```{r scalingfactors}
+# cutana spikein
 prct_mouse_reads<-100* (readstats$mm10_Reads...6 / (readstats$NReadsTrim*2))
-prct_spikein_reads<-100000*colSums(data[,2:ncol(data)]) / (readstats$NReadsTrim * 2)
+prct_spikein_reads<-100* (colSums(data[,2:ncol(data)]) / (readstats$NReadsTrim * 2))
 
-scale_factor<-as.matrix(prct_mouse_reads/prct_spikein_reads)
-colnames(scale_factor)<-'scale factor'
+# nf-core spike-in 
+otherspike<-10000 / colSums(data[,2:ncol(data)])
+scale_factor<-as.matrix(cbind(prct_mouse_reads/prct_spikein_reads,otherspike))
+colnames(scale_factor)<-c('scale factor1 (SNAP-CUTANA)','scale factor2 (typical method)')
 DT::datatable(scale_factor, 
               options = list(
                 dom = 't',
                 pageLength=nrow(cc)
               )) %>%
-   DT::formatRound(columns=1)
+   DT::formatRound(columns=c(1,2))
+df<-data.frame(scale_factor)
+
+ggplot(df,aes(x=`scale.factor1..SNAP.CUTANA.`,y=`scale.factor2..typical.method.`)) +
+  geom_point() + 
+  theme_bw() +
+  ylab('typical scaling factor') +
+  xlab('SNAP-CUTANA scaling factor')
+
+df<-tibble::rownames_to_column(df,"sample")
+
+write.table(df,'scale_factors.tsv', quote=F, sep="\t",row.names=F)
+
 ```
