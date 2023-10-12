@@ -53,16 +53,20 @@ Examine the % total barcode reads or spike-in bandwidth for each reaction. The s
 ```{r spikeinbandwidth}
 
 cc<-100*colSums(data[,2:ncol(data)]) / readstats$mm10_Reads...6
-cc<-as.matrix(cc)
-colnames(cc)<-'prct_barcodes'
+sums<-colSums(data[,2:ncol(data)])
+cc<-as.matrix(cbind( readstats$mm10_Reads...6, sums,cc))
+colnames(cc)<-c('num_reads', 'barcode_counts','prct_barcodes')
 DT::datatable(cc, 
               options = list(
                 dom = 't',
                 pageLength=nrow(cc)
               )) %>%
-   DT::formatRound(columns=1)
+   DT::formatRound(columns=3)
 ```
 
+barcode counts on the low end (want tens of thousands)
+% for IgG samples are much lower than the recommended
+ 
 ## Examine spike in data
 
 Use Output Table to assess antibody binding specificity starting with control reactions. Some guidance on using the controls:
@@ -115,13 +119,15 @@ Heatmap(mydata_mat,
 
 Cross reactivity of H3K9me3 with H3K4me3, H3K27me3, and H4K20me3.
 
-Some issues with IgG samples as well (some blue areas in heat map, particularly for WT samples).  
+Some issues with IgG samples as well (some blue areas in heat map, particularly for WT samples --  might be because the barcode counts are low?).  
 
 ## Compute scaling factors
 
-For spike-in normalization, a scale factor was calculated for each sample by dividing the percent of total reads aligned to the ref genome by the percent of total reads aligned to the spike-in barcodes (Scale Factor = % mapped Reads / % Spike-in Reads) and applying this factor to adjust the total sequencing reads of each respective sample. 
+From the SNAP-CUTANA manual:
 
-Not sure why this is the recommended scaling formula, other spike in procedures only use the spike-in counts to normalize (why rescale spike in?).  the nf-core wf uses scale_factor = 10^4/ # spike-in reads (This is scale.factor2)
+>For spike-in normalization, a scale factor was calculated for each sample by dividing the percent of total reads aligned to the ref genome by the percent of total reads aligned to the spike-in barcodes (Scale Factor = % mapped Reads / % Spike-in Reads) and applying this factor to adjust the total sequencing reads of each respective sample. 
+
+Not sure why this is the recommended scaling formula, other spike in procedures just use the spike-in counts to normalize (why rescale spike in by number of reads then normalize?).  The nf-core wf and other manuscripts e.g. [Orlando et al.](https://pubmed.ncbi.nlm.nih.gov/25437568/)  use scale_factor = 10^4/ # spike-in reads (This is scale.factor2 in the table and plot below)
 
 ```{r scalingfactors}
 # cutana spikein
