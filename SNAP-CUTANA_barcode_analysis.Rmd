@@ -90,7 +90,7 @@ ctrl_inds<-which(grepl("IgG", colnames(data)))
 ip_inds<-which(grepl(target, colnames((data))))
 target_inds<-which(grepl(target,data$modification))
 
-norm_igg<-100*(data[,ctrl_inds]/colSums(data[,ctrl_inds]))
+norm_igg<-100*mapply('/',data[,ctrl_inds],colSums(data[,ctrl_inds]))
 rownames(norm_igg)<-data$modification
 norm_ip<-data.frame(100*mapply('/',data[,ip_inds],data[target_inds,ip_inds]))
 rownames(norm_ip)<-data$modification
